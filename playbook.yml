@@ -1,0 +1,89 @@
+- name: Launch new AMI Release
+  hosts: localhost
+  connection: local
+  vars_files:
+    - ./env.yml
+    - ./config.yml
+
+  tasks:
+
+  #  Get VPC subnet details as it will be needed later while setting up autoscaling group
+  - name: Get VPC Subnet Details
+    ec2_vpc_subnet_facts:
+      aws_access_key: "{{ project_aws_access_key }}"
+      aws_secret_key: "{{ project_aws_secret_key }}"
+      region: "{{ project_region }}"
+      filters:
+        vpc-id: "{{ project_vpc_id }}"
+        "tag:Availability": "Public"
+    # Save the result json in variable subnet_facts
+    register: subnet_facts
+
+  # From the previously registered variable subnet_facts
+  # Get filter subnet which are in avaible state
+  # Use jinja to parse json and get list of ids
+  # This list will be used directly while setting up autoscaling group
+  - name: Get VPC Subnet ids which are available
+    set_fact:
+      vpc_subnet_ids: "{{ project_subnet_id }}"
+
+  # Create new launch configuration as existing one can not be edited
+  # This launch configuration will contain the new AMI
+  - name: Configure new launch configuration
+    ec2_lc:
+      aws_access_key: "{{ project_aws_access_key }}"
+      aws_secret_key: "{{ project_aws_secret_key }}"
+      region: "{{ project_region }}"
+      name: "{{ project_lunch_config_name }}"
+      # This image Id will be the new golden AMI after release is complete
+      image_id: "{{ project_golden_ami_id }}"
+      instance_profile_name: "{{ project_ec2_iam_role }}"
+      vpc_id: "{{ project_vpc_id }}"
+      security_groups: ["{{ project_instance_security_group }}"]
+      instance_type: "{{ project_instance_type }}"
+      # All commands specified in below ./startup.sh will run as soon as instance is launched
+      user_data_path: ./startup.sh
+      volumes:
+      - device_name: /dev/sda1
+        volume_size: "{{ project_instance_volume_in_gb }}"
+        volume_type: gp2
+        iops: 3000
+        delete_on_termination: true
+        encrypted: true
+
+  # Update autoscaling group and associate new launch configuration
+  # As there is no AMI just to update an existing autoscaling group
+  # We specify all options and ansible will match the name to update
+  - name: Update Auto Scalling Group with new launch configuration
+    ec2_asg:
+      aws_access_key: "{{ project_aws_access_key }}"
+      aws_secret_key: "{{ project_aws_secret_key }}"
+      name: "{{ project_autoscaling_group_name }}"
+      region: "{{ project_region }}"
+      launch_config_name: "{{ project_lunch_config_name }}"
+      default_cooldown: 180
+      health_check_period: 300
+      health_check_type: ELB
+      target_group_arns: ["{{ project_target_group_arn }}"]
+      desired_capacity: 1
+      min_size: 0
+      max_size: 6
+      vpc_zone_identifier: "{{ vpc_subnet_ids }}"
+      # Below settings will replace all existing instances in this autoscaling group
+      # With instances of new AMI release
+      # The replacing will happen in batches with 2 instances replaced at at time
+      replace_all_instances: true
+      replace_batch_size: 2
+      # We will wait untill all newly replaced instances are healthy and in service
+      # Max wait time will be 10 minutes after which ansible will time out
+      # In case of timeout the activity will keep happening on AWS
+      # Just that the terminal will not wait for the output and exit with code 0
+      wait_for_instances: true
+      wait_timeout: 600
+      # Below tabs will be present on all production instances launched with new AMI
+      tags:
+      - Environment: Production
+        Name : "Production instances | {{ project_ami_version }}"
+        Project: Your Project Name
+        Vesion : "{{ project_ami_version }}"
+

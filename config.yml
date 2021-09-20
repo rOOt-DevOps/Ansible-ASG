@@ -1,0 +1,10 @@
+project_lunch_config_name: FinalLC
+project_autoscaling_group_name: FinalASg
+project_vpc_id: vpc-0c46449253a7d356b
+project_ec2_iam_role: arn:aws:iam::023011494045:instance-profile/AWS_ROLE_FOR_ANSIBLE
+project_instance_type: t2.micro
+project_instance_volume_in_gb: 8
+project_instance_security_group: sg-0946bda10e1e61148
+project_subnet_id: subnet-07eb00bed975d4f32, subnet-0398caee1d98b04a9, subnet-04bad359e84a350e6
+
+
