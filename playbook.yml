@@ -7,7 +7,7 @@
 
   tasks:
 
-  #  Get VPC subnet details as it will be needed later while setting up autoscaling group
+  #  Get VPC subnet details
   - name: Get VPC Subnet Details
     ec2_vpc_subnet_facts:
       aws_access_key: "{{ project_aws_access_key }}"
@@ -19,15 +19,12 @@
     # Save the result json in variable subnet_facts
     register: subnet_facts
 
-  # From the previously registered variable subnet_facts
-  # Get filter subnet which are in avaible state
-  # Use jinja to parse json and get list of ids
   # This list will be used directly while setting up autoscaling group
   - name: Get VPC Subnet ids which are available
     set_fact:
       vpc_subnet_ids: "{{ project_subnet_id }}"
 
-  # Create new launch configuration as existing one can not be edited
+  # Create new launch configuration 
   # This launch configuration will contain the new AMI
   - name: Configure new launch configuration
     ec2_lc:
@@ -35,7 +32,7 @@
       aws_secret_key: "{{ project_aws_secret_key }}"
       region: "{{ project_region }}"
       name: "{{ project_lunch_config_name }}"
-      # This image Id will be the new golden AMI after release is complete
+      # This image Id will be the new golden AMI 
       image_id: "{{ project_golden_ami_id }}"
       instance_profile_name: "{{ project_ec2_iam_role }}"
       vpc_id: "{{ project_vpc_id }}"
